@@ -7,24 +7,15 @@ Original file is located at
     https://colab.research.google.com/drive/1yH5Z43gN3S8e9j2n9XiKYg4_5x1gU4vZ
 """
 
-!pip install -q yt-dlp moviepy transformers torch whisper
-
-!pip uninstall -y whisper
-
-!pip install -q git+https://github.com/openai/whisper.git
-
-!pip install -q torch
-
-import whisper
-print(whisper.__file__)
-print(hasattr(whisper, "load_model"))
-
 import os
 import whisper
-from moviepy.editor import VideoFileClip
+from static_ffmpeg import add_paths
+add_paths()
+from moviepy import VideoFileClip
 from transformers import pipeline
 import yt_dlp
 import torch
+
 
 
 # -----------------------------
@@ -59,25 +50,25 @@ def transcribe_audio(audio_path):
 # -----------------------------
 # STEP 4: Summarize Text
 # -----------------------------
-def summarize_text(text):
-    summarizer = pipeline(
-        "summarization",
-        model="facebook/bart-large-cnn",
-        device=0 if torch.cuda.is_available() else -1
-    )
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
+def summarize_text(text):
+    model_name = "facebook/bart-large-cnn"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
+
+    # Split text into chunks that the model can handle
     max_chunk = 1000
     chunks = [text[i:i+max_chunk] for i in range(0, len(text), max_chunk)]
 
     final_summary = ""
     for chunk in chunks:
-        summary = summarizer(
-            chunk,
-            max_length=150,
-            min_length=60,
-            do_sample=False
-        )
-        final_summary += summary[0]['summary_text'] + " "
+        inputs = tokenizer(chunk, return_tensors="pt", max_length=1024, truncation=True).to(device)
+        summary_ids = model.generate(inputs["input_ids"], max_length=150, min_length=40, length_penalty=2.0, num_beams=4, early_stopping=True)
+        summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        final_summary += summary + " "
 
     return final_summary.strip()
 

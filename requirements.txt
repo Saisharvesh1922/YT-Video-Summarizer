@@ -1,0 +1,6 @@
+yt-dlp
+moviepy
+transformers
+torch
+openai-whisper @ git+https://github.com/openai/whisper.git
+imageio-ffmpeg
